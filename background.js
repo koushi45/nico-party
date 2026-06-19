@@ -14,11 +14,30 @@ async function setSession(session) {
   await chrome.storage.local.set({ session });
 }
 
+function withSyncTab(session, syncTabId) {
+  return session ? { ...session, syncTabId: syncTabId || null } : null;
+}
+
+async function getSyncTab(session) {
+  if (!session?.syncTabId) return null;
+  try {
+    const tab = await chrome.tabs.get(session.syncTabId);
+    return tab?.id ? tab : null;
+  } catch {
+    return null;
+  }
+}
+
+async function syncTabInfo(session) {
+  const tab = await getSyncTab(session);
+  return tab ? { id: tab.id, title: tab.title || "", url: tab.url || "" } : null;
+}
+
 async function setSessionRole(session, isHost) {
   if (session.isHost === isHost) return session;
   const nextSession = { ...session, isHost };
   await setSession(nextSession);
-  await broadcast({ type: "SESSION_CHANGED", session: nextSession });
+  await broadcastSession(nextSession);
   return nextSession;
 }
 
@@ -49,22 +68,31 @@ async function request(path = "", options = {}, authenticated = true) {
   return { ...body, etag: response.headers.get("ETag") };
 }
 
-async function broadcast(message) {
+async function broadcastSession(session) {
   const tabs = await chrome.tabs.query({});
-  await Promise.allSettled(tabs.map((tab) => chrome.tabs.sendMessage(tab.id, message)));
+  await Promise.allSettled(tabs.map((tab) => chrome.tabs.sendMessage(tab.id, {
+    type: "SESSION_CHANGED",
+    session: session?.syncTabId === tab.id ? session : null,
+    syncTab: session?.syncTabId === tab.id ? { id: tab.id, title: tab.title || "", url: tab.url || "" } : null,
+  })));
 }
 
-async function isActiveTab(tabId) {
-  if (!tabId) return false;
-  const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  return activeTab?.id === tabId;
+async function sendToSyncTab(session, message) {
+  const tab = await getSyncTab(session);
+  if (!tab?.id) return false;
+  await chrome.tabs.sendMessage(tab.id, message).catch(() => null);
+  return true;
+}
+
+function isSyncTab(session, tabId) {
+  return Boolean(tabId && session?.syncTabId === tabId);
 }
 
 async function handleRoomUpdate(payload) {
   if (payload.deleted) {
     await setSession(null);
     stopRealtime();
-    await broadcast({ type: "SESSION_CHANGED", session: null });
+    await broadcastSession(null);
     return;
   }
   if (!payload.room) return;
@@ -72,7 +100,7 @@ async function handleRoomUpdate(payload) {
   if (!session || session.roomId !== payload.room.id) return;
   session = await setSessionRole(session, Boolean(payload.room.isHost));
   roomEtag = `"room-${payload.room.id}-${payload.room.state.revision}"`;
-  await broadcast({ type: "ROOM_UPDATED", ...payload, session });
+  await sendToSyncTab(session, { type: "ROOM_UPDATED", ...payload, session });
 }
 
 async function streamRoomEvents(session, generation) {
@@ -153,7 +181,7 @@ async function leaveCurrentRoom() {
   await request(`/${session.roomId}/leave`, { method: "POST" }).catch(() => null);
   await setSession(null);
   stopRealtime();
-  await broadcast({ type: "SESSION_CHANGED", session: null });
+  await broadcastSession(null);
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -164,8 +192,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const result = await request(`/${session.roomId}`);
         session = await setSessionRole(session, Boolean(result.room?.isHost));
       }
+      if (session?.syncTabId && !await getSyncTab(session)) {
+        session = { ...session, syncTabId: null };
+        await setSession(session);
+        await broadcastSession(session);
+      }
       if (session && !heartbeatTimer) startRealtime(session);
-      return { session };
+      const tabSession = isSyncTab(session, sender.tab?.id) ? session : null;
+      return { session: tabSession, syncTab: await syncTabInfo(session) };
     }
 
     if (message.type === "START_PAIRING") {
@@ -174,16 +208,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return pairing;
     }
 
+    if (message.type === "GET_VERSION") {
+      return await request("/version", { method: "GET" }, false);
+    }
+
     if (message.type === "LIST_ROOMS") {
       const result = await request();
       let session = await getSession();
       let currentRoom = null;
+      let syncTab = null;
       if (session) {
         try {
           currentRoom = (await request(`/${session.roomId}`)).room;
           if (typeof currentRoom?.isHost === "boolean") {
             session = await setSessionRole(session, currentRoom.isHost);
           }
+          if (session?.syncTabId && !await getSyncTab(session)) {
+            session = { ...session, syncTabId: null };
+            await setSession(session);
+          }
+          syncTab = await syncTabInfo(session);
         } catch (error) {
           if (error.status === 404 || error.status === 403) {
             await setSession(null);
@@ -192,16 +236,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           else throw error;
         }
       }
-      return { ...result, session: currentRoom ? session : null, currentRoom };
+      return { ...result, session: currentRoom ? session : null, currentRoom, syncTab };
     }
 
     if (message.type === "CREATE_ROOM") {
       await leaveCurrentRoom();
       const result = await request("", { method: "POST", body: JSON.stringify(message.state) });
-      const session = { roomId: result.room.id, isHost: Boolean(result.room?.isHost) };
+      const session = withSyncTab({ roomId: result.room.id, isHost: Boolean(result.room?.isHost) }, message.syncTabId);
       await setSession(session);
       startRealtime(session);
-      await broadcast({ type: "SESSION_CHANGED", session });
+      await broadcastSession(session);
       return { session, ...result };
     }
 
@@ -209,10 +253,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       await leaveCurrentRoom();
       const roomId = String(message.roomId || "").trim().toUpperCase();
       const result = await request(`/${roomId}`, { method: "POST" });
-      const session = { roomId, isHost: Boolean(result.room?.isHost) };
+      const session = withSyncTab({ roomId, isHost: Boolean(result.room?.isHost) }, message.syncTabId);
       await setSession(session);
       startRealtime(session);
-      await broadcast({ type: "SESSION_CHANGED", session });
+      await broadcastSession(session);
       return { session, ...result };
     }
 
@@ -224,19 +268,46 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const session = await getSession();
     if (!session) return { session: null };
 
+    if (message.type === "SET_SYNC_TAB") {
+      const nextSession = { ...session, syncTabId: message.tabId || null };
+      await setSession(nextSession);
+      await broadcastSession(nextSession);
+      return { session: nextSession, syncTab: await syncTabInfo(nextSession) };
+    }
     if (message.type === "POLL") {
+      if (!isSyncTab(session, sender.tab?.id)) return { ignored: true };
       return await pollCurrentRoom(session);
     }
     if (message.type === "UPDATE_STATE") {
       if (!session.isHost) return { ignored: true };
-      if (!await isActiveTab(sender.tab?.id)) return { ignored: true };
+      if (!isSyncTab(session, sender.tab?.id)) return { ignored: true };
       return await request(`/${session.roomId}`, { method: "PUT", body: JSON.stringify(message.state) });
+    }
+    if (message.type === "ADD_QUEUE_ITEM") {
+      return await request(`/${session.roomId}/queue`, {
+        method: "POST",
+        body: JSON.stringify(message.item),
+      });
+    }
+    if (message.type === "DELETE_QUEUE_ITEM") {
+      return await request(`/${session.roomId}/queue/${encodeURIComponent(message.itemId)}`, { method: "DELETE" });
+    }
+    if (message.type === "REORDER_QUEUE") {
+      return await request(`/${session.roomId}/queue`, {
+        method: "PUT",
+        body: JSON.stringify({ queueIds: message.queueIds }),
+      });
+    }
+    if (message.type === "ADVANCE_QUEUE") {
+      if (!session.isHost) return { ignored: true };
+      if (!isSyncTab(session, sender.tab?.id)) return { ignored: true };
+      return await request(`/${session.roomId}/queue/next`, { method: "POST" });
     }
     if (message.type === "DELETE_ROOM") {
       const result = await request(`/${session.roomId}`, { method: "DELETE" });
       await setSession(null);
       stopRealtime();
-      await broadcast({ type: "SESSION_CHANGED", session: null });
+      await broadcastSession(null);
       return result;
     }
     if (message.type === "TRANSFER_HOST") {
@@ -249,6 +320,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
   })().then(sendResponse).catch((error) => sendResponse({ error: error.message, status: error.status }));
   return true;
+});
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  void (async () => {
+    const session = await getSession();
+    if (session?.syncTabId !== tabId) return;
+    const nextSession = { ...session, syncTabId: null };
+    await setSession(nextSession);
+    await broadcastSession(nextSession);
+  })();
 });
 
 getSession().then(startRealtime);

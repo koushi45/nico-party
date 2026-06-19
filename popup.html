@@ -28,12 +28,18 @@
         <nav class="tabs">
           <button class="tab active" data-tab="rooms">ルーム一覧</button>
           <button class="tab" data-tab="current">接続中 <span id="connectedDot"></span></button>
+          <button class="tab" data-tab="queue">キュー管理</button>
         </nav>
 
         <section id="roomsPanel" class="panel">
           <div class="create-card">
             <p id="site">対応動画ページを開いてください</p>
             <button id="create">現在の動画でルームを作成</button>
+            <button id="grantAccess" class="secondary" hidden>ニコニコ動画へのアクセスを許可</button>
+            <details id="diagnostics">
+              <summary>診断ログ</summary>
+              <pre id="diagnosticLog"></pre>
+            </details>
           </div>
           <div id="rooms" class="room-list"></div>
           <p id="noRooms" class="empty-state">現在立てられているルームはありません。</p>
@@ -51,14 +57,41 @@
             </div>
             <p id="currentTitle" class="video-title"></p>
             <a id="currentUrl" class="video-url" href="#" hidden></a>
+            <div class="sync-tab-box">
+              <span class="eyebrow">同期タブ</span>
+              <p id="syncTabInfo" class="sync-tab-info"></p>
+              <button id="syncThisTab" class="secondary small">このタブを同期</button>
+            </div>
             <h2>入室者</h2>
             <div id="participants" class="participants"></div>
             <button id="deleteRoom" class="danger" hidden>ルームを削除</button>
           </div>
         </section>
+
+        <section id="queuePanel" class="panel" hidden>
+          <div id="queueRoomCard" hidden>
+            <div class="queue-panel">
+              <div class="queue-actions">
+                <button id="addCurrentToQueue" class="secondary small">現在の動画をキューに追加</button>
+              </div>
+              <div class="queue-url-row">
+                <input id="queueUrl" type="url" placeholder="動画URLをキューに追加">
+                <button id="addUrlToQueue" class="small">追加</button>
+              </div>
+              <h2>再生キュー</h2>
+              <div id="queue" class="queue-list"></div>
+              <p id="emptyQueue" class="empty-queue">キューは空です。</p>
+            </div>
+          </div>
+          <div id="queueNotConnected" class="empty-state">ルームに接続していません。</div>
+        </section>
       </section>
 
       <p id="status"></p>
+      <footer class="footer">
+        <span id="extensionVersion">Homo Party v-</span>
+        <span id="versionNotice" class="version-notice" hidden></span>
+      </footer>
     </main>
     <script src="popup.js"></script>
   </body>

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Homo Party",
-  "version": "2.1.0",
+  "version": "2.2.3",
   "description": "YouTube、Amazon Prime Video、ニコニコ動画の再生状態をルーム内で同期します。",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwjU+pFc50WEf+pSnWgV5LPclDcpcTdNM1dHA1BSaHzCodwrnXRUnBQDBDuW11p1krgjMuN3Gv/nhOqfosOyaLRUN0ZS9TdUbqkiI2Yn6CTdRvLUYnpbs8nmZAT8dDMRJL2VchpQQpYcOe+KrYrKRkFY9iru2QtwtiZP6cZjr9FaxVnUHuv/vp7ddNRP27Kud5aXZNue7blgB+72f0RbbRS3PEx648CEiJVLriJpZ0OtJjeUrnLyljzO85Y9/etw9fjA7NGw9/2CHME0B35FqrTBP95Pe1HEuEhrzhDDiBYWaoBn0ytT6C4zc6fQ2kIdMPfnjw7KLc1/fb0Ft5156nQIDAQAB",
   "icons": {
@@ -9,8 +9,16 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "permissions": ["storage", "tabs"],
-  "host_permissions": ["https://rimworld-inm.duckdns.org/*"],
+  "permissions": ["storage", "tabs", "scripting", "activeTab"],
+  "host_permissions": [
+    "https://rimworld-inm.duckdns.org/*",
+    "https://www.youtube.com/*",
+    "https://youtube.com/*",
+    "https://www.amazon.com/*",
+    "https://www.amazon.co.jp/*",
+    "https://www.primevideo.com/*"
+  ],
+  "optional_host_permissions": ["https://*.nicovideo.jp/*"],
   "action": {
     "default_icon": {
       "16": "icons/icon16.png",
@@ -32,10 +40,12 @@
         "https://www.amazon.com/*",
         "https://www.amazon.co.jp/*",
         "https://www.primevideo.com/*",
-        "https://www.nicovideo.jp/*"
+        "https://*.nicovideo.jp/*"
       ],
       "js": ["content.js"],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": true,
+      "match_origin_as_fallback": true
     }
   ]
 }
