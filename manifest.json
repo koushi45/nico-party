@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Homo Party",
-  "version": "2.2.3",
+  "version": "2.2.7",
   "description": "YouTube、Amazon Prime Video、ニコニコ動画の再生状態をルーム内で同期します。",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwjU+pFc50WEf+pSnWgV5LPclDcpcTdNM1dHA1BSaHzCodwrnXRUnBQDBDuW11p1krgjMuN3Gv/nhOqfosOyaLRUN0ZS9TdUbqkiI2Yn6CTdRvLUYnpbs8nmZAT8dDMRJL2VchpQQpYcOe+KrYrKRkFY9iru2QtwtiZP6cZjr9FaxVnUHuv/vp7ddNRP27Kud5aXZNue7blgB+72f0RbbRS3PEx648CEiJVLriJpZ0OtJjeUrnLyljzO85Y9/etw9fjA7NGw9/2CHME0B35FqrTBP95Pe1HEuEhrzhDDiBYWaoBn0ytT6C4zc6fQ2kIdMPfnjw7KLc1/fb0Ft5156nQIDAQAB",
   "icons": {

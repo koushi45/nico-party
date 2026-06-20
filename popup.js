@@ -102,8 +102,14 @@ function videoUrl(room) {
 function mediaKeyForUrl(value) {
   try {
     const url = new URL(value);
-    if (url.hostname === "youtu.be") return `youtube:${url.pathname.slice(1) || url.pathname}`;
-    if (url.hostname.includes("youtube.com")) return `youtube:${url.searchParams.get("v") || url.pathname}`;
+    const pathParts = url.pathname.split("/").filter(Boolean);
+    if (url.hostname === "youtu.be") return `youtube:${pathParts[0] || url.pathname}`;
+    if (url.hostname.includes("youtube.com")) {
+      const videoId = url.searchParams.get("v")
+        || (["embed", "shorts", "live"].includes(pathParts[0]) ? pathParts[1] : "")
+        || url.pathname;
+      return `youtube:${videoId}`;
+    }
     if (url.hostname.includes("nicovideo.jp")) return `nicovideo:${url.pathname}`;
     if (url.hostname.includes("amazon.") || url.hostname.includes("primevideo.com")) return `primevideo:${url.pathname}`;
     return "";
